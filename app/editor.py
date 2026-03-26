@@ -16,16 +16,9 @@ def _load_default_template() -> str:
     # In Docker: /app/templates/project_info.md
     # In monorepo: services/orchestrator/../../templates/project_info.md
     app_dir = FilePath(__file__).resolve().parent  # /app/app/
-    candidates = [
-        app_dir.parent / "templates" / "project_info.md",   # /app/templates/
-        app_dir.parents[2] / "templates" / "project_info.md",  # monorepo (if deep enough)
-    ]
-    for p in candidates:
-        try:
-            if p.exists():
-                return p.read_text(encoding="utf-8")
-        except (IndexError, OSError):
-            continue
+    template_path = app_dir.parent / "templates" / "project_info.md"  # /app/templates/
+    if template_path.exists():
+        return template_path.read_text(encoding="utf-8")
     # Fallback if template file not found
     return "# Описание проекта\n\n## Название\n\n## Тематика\n\n## Целевая аудитория\n"
 
