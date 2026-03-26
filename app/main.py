@@ -70,15 +70,25 @@ def execute_next_step(project_id: str):
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    task = db.get_next_task(project_id)
+    # Check for blocking tasks (waiting_gate, running, error)
+    blocker = db.has_blocking_task(project_id)
+    if blocker:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Pipeline blocked: task {blocker['agent_name']} is in '{blocker['status']}' state",
+        )
+
+    # Atomically claim the next pending task (SELECT + UPDATE in one transaction)
+    task = db.claim_next_task(project_id)
     if not task:
         return {"message": "No pending tasks", "pipeline_complete": True}
 
-    # Mark as running
-    db.update_task_status(task["id"], "running")
-
-    # Execute agent
-    result = engine.run_agent(task["agent_name"], project_id, task.get("params", {}))
+    # Execute agent — catch all errors so task never stays stuck in 'running'
+    try:
+        result = engine.run_agent(task["agent_name"], project_id, task.get("params", {}))
+    except Exception as e:
+        logger.error(f"Agent {task['agent_name']} raised exception: {e}")
+        result = {"status": "error", "error": str(e)}
 
     if result.get("status") == "error":
         db.update_task_status(task["id"], "error", result)

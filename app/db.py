@@ -71,19 +71,48 @@ def enqueue_tasks(project_id: str, pipeline: list[dict]) -> list[dict]:
             return tasks
 
 
-def get_next_task(project_id: str) -> dict | None:
-    """Get the next pending task for a project (with row lock)."""
+def has_blocking_task(project_id: str) -> dict | None:
+    """Check if pipeline is blocked by a waiting_gate, running, or error task."""
     with _connect() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
-                """SELECT * FROM projects.task_queue
+                """SELECT id, agent_name, status FROM projects.task_queue
+                   WHERE project_id = %s AND status IN ('waiting_gate', 'running', 'error')
+                   ORDER BY priority ASC LIMIT 1""",
+                (project_id,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+
+
+def claim_next_task(project_id: str) -> dict | None:
+    """Atomically find the next pending task and set it to running.
+
+    Uses SELECT ... FOR UPDATE SKIP LOCKED + UPDATE in a single transaction
+    to prevent double-claiming under concurrent calls.
+    """
+    with _connect() as conn:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """SELECT id FROM projects.task_queue
                    WHERE project_id = %s AND status = 'pending'
                    ORDER BY priority ASC LIMIT 1
                    FOR UPDATE SKIP LOCKED""",
                 (project_id,),
             )
             row = cur.fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            task_id = row["id"]
+            cur.execute(
+                """UPDATE projects.task_queue
+                   SET status = 'running', started_at = NOW()
+                   WHERE id = %s
+                   RETURNING *""",
+                (task_id,),
+            )
+            conn.commit()
+            return dict(cur.fetchone())
 
 
 def update_task_status(task_id: int, status: str, result: dict | None = None) -> None:

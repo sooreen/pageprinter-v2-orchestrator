@@ -20,30 +20,45 @@ def _get_agent_url(agent_name: str) -> str | None:
 
 
 def run_agent(agent_name: str, project_id: str, params: dict | None = None) -> dict:
-    """Call POST /run on an agent and poll until completion."""
+    """Call POST /run on an agent and poll until completion.
+
+    Raises on unrecoverable network errors so the caller can mark the task as 'error'.
+    """
     base_url = _get_agent_url(agent_name)
     if not base_url:
         return {"status": "error", "error": f"Agent {agent_name} not found in AGENT_URLS"}
 
     # Start the agent
-    with httpx.Client(timeout=30.0) as client:
-        resp = client.post(
-            f"{base_url}/run",
-            json={"project_id": project_id, "params": params or {}},
-        )
-        if resp.status_code == 409:
-            return {"status": "error", "error": f"Agent {agent_name} is already running"}
-        resp.raise_for_status()
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            resp = client.post(
+                f"{base_url}/run",
+                json={"project_id": project_id, "params": params or {}},
+            )
+            if resp.status_code == 409:
+                return {"status": "error", "error": f"Agent {agent_name} is already running"}
+            resp.raise_for_status()
+    except httpx.HTTPError as e:
+        return {"status": "error", "error": f"Failed to start agent {agent_name}: {e}"}
 
     # Poll for completion
     max_polls = 3600  # 1 hour at 1s interval
+    consecutive_errors = 0
     for _ in range(max_polls):
         time.sleep(1)
-        with httpx.Client(timeout=10.0) as client:
-            status_resp = client.get(f"{base_url}/status")
-            status_data = status_resp.json()
-            if status_data["status"] in ("done", "error"):
-                return status_data
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                status_resp = client.get(f"{base_url}/status")
+                status_resp.raise_for_status()
+                status_data = status_resp.json()
+                consecutive_errors = 0
+                if status_data["status"] in ("done", "error"):
+                    return status_data
+        except (httpx.HTTPError, ValueError, KeyError) as e:
+            consecutive_errors += 1
+            logger.warning(f"Poll error for {agent_name} ({consecutive_errors}/10): {e}")
+            if consecutive_errors >= 10:
+                return {"status": "error", "error": f"Agent {agent_name} unreachable after 10 consecutive poll failures"}
 
     return {"status": "error", "error": f"Agent {agent_name} timed out after {max_polls}s"}
 
