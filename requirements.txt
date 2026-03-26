@@ -5,3 +5,4 @@ pydantic-settings>=2.7,<2.8
 psycopg2-binary>=2.9,<2.10
 httpx>=0.28,<0.29
 minio>=7.2,<8.0
+jsonschema>=4.20,<5.0

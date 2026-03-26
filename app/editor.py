@@ -1,6 +1,7 @@
 """Online Markdown editor for project_info.md."""
 
 import html as html_module
+from pathlib import Path as FilePath
 
 from fastapi import APIRouter, Path
 from fastapi.responses import HTMLResponse
@@ -9,27 +10,18 @@ from app import storage
 
 router = APIRouter()
 
-_DEFAULT_TEMPLATE = """\
-# Описание проекта
 
-## Название
-Название проекта
-
-## Тематика
-Краткое описание тематики сайта
-
-## Целевая аудитория
-Кто будет пользоваться сайтом и зачем
-
-## Нюансы ниши
-- Особенности ниши
-
-## Конкуренты (опционально)
-- https://example.com
-
-## Seed-запросы (опционально)
-- пример запроса
-"""
+def _load_default_template() -> str:
+    """Load the default template from the single source of truth."""
+    candidates = [
+        FilePath("/app/templates/project_info.md"),
+        FilePath(__file__).resolve().parents[3] / "templates" / "project_info.md",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p.read_text(encoding="utf-8")
+    # Fallback if template file not found
+    return "# Описание проекта\n\n## Название\n\n## Тематика\n\n## Целевая аудитория\n"
 
 
 def _build_html(project_id: str, content: str) -> str:
@@ -108,6 +100,14 @@ def editor(project_id: str = Path(pattern=r"^[a-z0-9][a-z0-9_-]*$")):
     path = f"{project_id}/project_info.md"
     try:
         content = storage.read_text(path)
-    except Exception:
-        content = _DEFAULT_TEMPLATE
+    except Exception as e:
+        error_str = str(e)
+        if "NoSuchKey" in error_str or "NoSuchBucket" in error_str:
+            content = _load_default_template()
+        else:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=502,
+                detail=f"Cannot read from storage: {error_str}",
+            )
     return HTMLResponse(_build_html(project_id, content))

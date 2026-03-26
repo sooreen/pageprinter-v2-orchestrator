@@ -2,8 +2,8 @@
 
 # Each step: agent name, whether it has a human gate, gate name
 PIPELINE = [
+    # data-input (3.1.2) is built into the orchestrator — start_pipeline() runs the parser
     {"agent": "idea-search", "gate": "idea_approval"},
-    {"agent": "data-input", "gate": None},
     {"agent": "competitor-search", "gate": "competitor_approval"},
     {"agent": "competitor-parser", "gate": None},
     {"agent": "competitor-analyzer", "gate": "structure_approval"},

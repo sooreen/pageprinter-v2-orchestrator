@@ -37,8 +37,11 @@ def read_file(
     try:
         content = storage.read_text(full_path)
         return {"path": full_path, "content": content}
-    except Exception:
-        raise HTTPException(status_code=404, detail=f"File not found: {full_path}")
+    except Exception as e:
+        error_str = str(e)
+        if "NoSuchKey" in error_str or "NoSuchBucket" in error_str:
+            raise HTTPException(status_code=404, detail=f"File not found: {full_path}")
+        raise HTTPException(status_code=502, detail=f"Storage error: {error_str}")
 
 
 @router.put("/projects/{project_id}/files/{path:path}")

@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectInput",
+  "description": "Входной пакет проекта (агент 3.1.2)",
+  "type": "object",
+  "required": [
+    "project_name",
+    "topic",
+    "target_audience"
+  ],
+  "properties": {
+    "project_name": {
+      "type": "string",
+      "description": "Название проекта"
+    },
+    "topic": {
+      "type": "string",
+      "description": "Тематика сайта"
+    },
+    "target_audience": {
+      "type": "string",
+      "description": "Целевая аудитория"
+    },
+    "niche_notes": {
+      "type": "string",
+      "description": "Нюансы ниши"
+    },
+    "competitor_urls": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uri"
+      },
+      "description": "Список URL конкурентов (опционально)"
+    },
+    "seed_queries": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Seed-запросы от человека (опционально)"
+    }
+  },
+  "additionalProperties": false
+}
