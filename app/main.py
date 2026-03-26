@@ -5,13 +5,17 @@ import logging
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from app import db, engine
+from app import db, engine, parser
+from app import files as files_router
+from app import editor as editor_router
 from app.pipeline import get_pipeline
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="PagePrinterV2 Orchestrator")
+app.include_router(files_router.router)
+app.include_router(editor_router.router)
 
 
 # --- Request/Response Models ---
@@ -121,6 +125,23 @@ def start_pipeline(project_id: str):
     existing_tasks = db.get_project_tasks(project_id)
     if existing_tasks:
         raise HTTPException(status_code=409, detail="Pipeline already started")
+
+    # Parse project_info.md → project_input.json
+    try:
+        parser.parse_and_save(project_id)
+    except Exception as e:
+        error_msg = str(e)
+        if "NoSuchKey" in error_msg or "not found" in error_msg.lower():
+            raise HTTPException(
+                status_code=400,
+                detail="project_info.md not found. Use the editor to create it first.",
+            )
+        elif "Missing required" in error_msg:
+            raise HTTPException(status_code=400, detail=error_msg)
+        else:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to parse project_info.md: {error_msg}"
+            )
 
     pipeline = get_pipeline()
     tasks = db.enqueue_tasks(project_id, pipeline)
