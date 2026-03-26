@@ -13,13 +13,19 @@ router = APIRouter()
 
 def _load_default_template() -> str:
     """Load the default template from the single source of truth."""
+    # In Docker: /app/templates/project_info.md
+    # In monorepo: services/orchestrator/../../templates/project_info.md
+    app_dir = FilePath(__file__).resolve().parent  # /app/app/
     candidates = [
-        FilePath("/app/templates/project_info.md"),
-        FilePath(__file__).resolve().parents[3] / "templates" / "project_info.md",
+        app_dir.parent / "templates" / "project_info.md",   # /app/templates/
+        app_dir.parents[2] / "templates" / "project_info.md",  # monorepo (if deep enough)
     ]
     for p in candidates:
-        if p.exists():
-            return p.read_text(encoding="utf-8")
+        try:
+            if p.exists():
+                return p.read_text(encoding="utf-8")
+        except (IndexError, OSError):
+            continue
     # Fallback if template file not found
     return "# Описание проекта\n\n## Название\n\n## Тематика\n\n## Целевая аудитория\n"
 

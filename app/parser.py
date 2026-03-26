@@ -130,9 +130,9 @@ def parse_project_info(project_id: str) -> dict:
 def _load_schema() -> dict:
     """Load the project_input JSON schema from the contracts directory."""
     # Check multiple locations: Docker image, monorepo
+    app_dir = Path(__file__).resolve().parent  # /app/app/
     candidates = [
-        Path("/app/contracts/project_input.schema.json"),
-        Path(__file__).resolve().parents[3] / "contracts" / "project_input.schema.json",
+        app_dir.parent / "contracts" / "project_input.schema.json",  # /app/contracts/
     ]
     for schema_path in candidates:
         if schema_path.exists():
